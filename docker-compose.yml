@@ -1,7 +1,7 @@
 version: "3.8"
 
 services:
-  simplesaml:
+  simplesamlphp:
     image: ilifesregistry.azurecr.io/simplesamlphp:latest
     ports:
       - "8081:80"
