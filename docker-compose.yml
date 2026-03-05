@@ -3,7 +3,7 @@ version: "3.8"
 services:
   simplesaml:
     image: ilifesregistry.azurecr.io/simplesamlphp:latest
-    contaniner_name: simplesamlphp
+    container_name: simplesamlphp
     ports:
       - "8081:80"
     restart: unless-stopped
