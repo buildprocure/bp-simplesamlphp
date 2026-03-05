@@ -11,6 +11,7 @@ variables:
   ENABLESIMPLESAMLPHPSSO: 'true' # Set to 'true' to enable SimpleSAMLphp SSO deployment
   dockerRegistryServiceConnection: 'ilifes-acr-docker'
   dockerRepository: 'simplesamlphp'
+  imageTag: 'latest'
 
 stages:
   - stage: Build
@@ -40,8 +41,8 @@ stages:
               command: build
               containerRegistry: $(dockerRegistryServiceConnection)
               repository: simplesamlphp
-              Dockerfile: $(Build.SourcesDirectory)/bp-simplesamlphp/Dockerfile
-              buildContext: $(Build.SourcesDirectory)/bp-simplesamlphp
+              Dockerfile: $(Build.SourcesDirectory)/Dockerfile
+              buildContext: $(Build.SourcesDirectory)
               tags: latest
 
 
@@ -76,25 +77,20 @@ stages:
               command: login
               containerRegistry: $(dockerRegistryServiceConnection)
 
-          - task: Docker@2
+          - script: |
+              docker-compose -f $(Build.SourcesDirectory)/docker-compose.yml pull
             displayName: 'Pull SimpleSAMLphp Image'
-            condition: eq(variables['ENABLESIMPLESAMLPHPSSO'], 'true')
-            inputs:
-              command: pull
-              containerRegistry: $(dockerRegistryServiceConnection)
-              repository: simplesamlphp
-              tags: latest
 
           - script: |
               echo "Deploying SimpleSAMLphp to environment: ${{ parameters.environment }}"
             displayName: 'Deploy SimpleSAMLphp'
           # Make dockers containers down before running new ones
           - script: |
-              docker-compose -f $(Build.SourcesDirectory)/bp-simplesamlphp/docker-compose.yml down
+              docker-compose -f $(Build.SourcesDirectory)/docker-compose.yml down
             displayName: 'Stop Existing Containers' 
           # Run new containers with the latest image
           - script: |
-              docker-compose -f $(Build.SourcesDirectory)/bp-simplesamlphp/docker-compose.yml up -d
+              docker-compose -f $(Build.SourcesDirectory)/docker-compose.yml up -d
             displayName: 'Start New Containers'
 
           - script: |
