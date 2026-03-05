@@ -87,7 +87,7 @@ stages:
           # Make dockers containers down before running new ones
           - script: |
               docker-compose -f $(Build.SourcesDirectory)/docker-compose.yml down
-            displayName: 'Stop Existing Containers' 
+            displayName: 'Stop Existing Containers'
           # Run new containers with the latest image
           - script: |
               docker-compose -f $(Build.SourcesDirectory)/docker-compose.yml up -d

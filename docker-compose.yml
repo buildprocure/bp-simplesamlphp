@@ -9,6 +9,7 @@ services:
     restart: unless-stopped
     networks:
       - app-network
+
 networks:
   app-network:
     external: true
