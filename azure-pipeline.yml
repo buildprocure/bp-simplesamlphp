@@ -78,20 +78,12 @@ stages:
               containerRegistry: $(dockerRegistryServiceConnection)
 
           - script: |
-              docker-compose -f $(Build.SourcesDirectory)/docker-compose.yml pull
-            displayName: 'Pull SimpleSAMLphp Image'
+              docker network inspect app-network >/dev/null 2>&1 || docker network create app-network
 
-          - script: |
-              echo "Deploying SimpleSAMLphp to environment: ${{ parameters.environment }}"
-            displayName: 'Deploy SimpleSAMLphp'
-          # Make dockers containers down before running new ones
-          - script: |
-              docker-compose -f $(Build.SourcesDirectory)/docker-compose.yml down
-            displayName: 'Stop Existing Containers'
-          # Run new containers with the latest image
-          - script: |
-              docker-compose -f $(Build.SourcesDirectory)/docker-compose.yml up -d
-            displayName: 'Start New Containers'
+              docker-compose -f $(Build.SourcesDirectory)/docker-compose.yml down --remove-orphans || true
+              docker-compose -f $(Build.SourcesDirectory)/docker-compose.yml pull
+              docker-compose -f $(Build.SourcesDirectory)/docker-compose.yml up -d --build
+            displayName: Deploy Containers
 
           - script: |
               echo "SimpleSAMLphp deployed successfully to environment: ${{ parameters.environment }}"
