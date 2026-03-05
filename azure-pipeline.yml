@@ -38,7 +38,7 @@ stages:
             displayName: 'Build SimpleSAMLphp Image'
             inputs:
               command: build
-              containerRegistry: ${{ parameters.dockerRegistryServiceConnection }}
+              containerRegistry: $(dockerRegistryServiceConnection)
               repository: simplesamlphp
               Dockerfile: $(Build.SourcesDirectory)/bp-simplesamlphp/Dockerfile
               buildContext: $(Build.SourcesDirectory)/bp-simplesamlphp
@@ -50,7 +50,7 @@ stages:
             condition: eq(variables['ENABLESIMPLESAMLPHPSSO'], 'true')
             inputs:
               command: push
-              containerRegistry: ${{ parameters.dockerRegistryServiceConnection }}
+              containerRegistry: $(dockerRegistryServiceConnection)
               repository: simplesamlphp
               tags: latest
 
@@ -81,7 +81,7 @@ stages:
             condition: eq(variables['ENABLESIMPLESAMLPHPSSO'], 'true')
             inputs:
               command: pull
-              containerRegistry: ${{ parameters.dockerRegistryServiceConnection }}
+              containerRegistry: $(dockerRegistryServiceConnection)
               repository: simplesamlphp
               tags: latest
 
