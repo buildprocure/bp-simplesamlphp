@@ -23,11 +23,11 @@ stages:
 
         displayName: 'Build SimpleSAMLphp'
         steps:
-          - script:
-            displayName: 'List Build Scource directory'
-            inputs:
-              script: 'ls -R $(Build.SourcesDirectory)'
-              
+          - script: |
+              echo "Listing files after checkout:"
+              ls -laR $(Pipeline.Workspace)
+            displayName: 'Debug: List Workspace Files'
+
           - task: Docker@2
             displayName: 'Login to ACR'
             inputs:
@@ -65,10 +65,10 @@ stages:
           name: 'Default'
 
         steps:
-          - script:
-            displayName: 'List Build Scource directory'
-            inputs:
-              script: 'ls -R $(Build.SourcesDirectory)'
+          - script: |
+              echo "Listing files after checkout:"
+              ls -laR $(Pipeline.Workspace)
+            displayName: 'Debug: List Workspace Files'
 
           - task: Docker@2
             displayName: 'Login to ACR'
@@ -84,14 +84,19 @@ stages:
               containerRegistry: ${{ parameters.dockerRegistryServiceConnection }}
               repository: simplesamlphp
               tags: latest
-          - script: echo "Deploying SimpleSAMLphp to environment: ${{ parameters.environment }}"
+
+          - script: |
+              echo "Deploying SimpleSAMLphp to environment: ${{ parameters.environment }}"
             displayName: 'Deploy SimpleSAMLphp'
           # Make dockers containers down before running new ones
-          - script: docker-compose -f $(Build.SourcesDirectory)/bp-simplesamlphp/docker-compose.yml down
+          - script: |
+              docker-compose -f $(Build.SourcesDirectory)/bp-simplesamlphp/docker-compose.yml down
             displayName: 'Stop Existing Containers' 
           # Run new containers with the latest image
-          - script: docker-compose -f $(Build.SourcesDirectory)/bp-simplesamlphp/docker-compose.yml up -d
+          - script: |
+              docker-compose -f $(Build.SourcesDirectory)/bp-simplesamlphp/docker-compose.yml up -d
             displayName: 'Start New Containers'
 
-          - script: echo "SimpleSAMLphp deployed successfully to environment: ${{ parameters.environment }}"
+          - script: |
+              echo "SimpleSAMLphp deployed successfully to environment: ${{ parameters.environment }}"
             displayName: 'Deployment Success Message'
