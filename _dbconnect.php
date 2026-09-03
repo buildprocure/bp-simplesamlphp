@@ -3,11 +3,11 @@ ob_start();
 /* $update = false;
 $delete = false; */
 //Connect to the database
-$host = 'db';
-$db   = 'ilife';
-$user = 'root';
-$pass = '@Shova595Bhandari';
-$port = '3306';
+$host = getenv('MYSQL_HOST') ?: 'db';
+$db   = getenv('MYSQL_DATABASE') ?: 'ilife';
+$user = getenv('MYSQL_USER') ?: 'root';
+$pass = getenv('MYSQL_PASSWORD') ?: '';
+$port = getenv('MYSQL_PORT') ?: '3306';
 
 // Use mysqli to connect to MySQL
 

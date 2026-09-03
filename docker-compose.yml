@@ -1,11 +1,17 @@
 version: "3.8"
 
 services:
-  simplesaml:
-    image: ilifesregistry.azurecr.io/simplesamlphp:latest
-    contaniner_name: simplesamlphp
+  simplesamlphp:
+    image: ghcr.io/buildprocure/bp-simplesamlphp:latest
+    container_name: simplesamlphp
+    restart: unless-stopped
+    env_file:
+      - php-env-prod.env
     ports:
       - "8081:80"
-    restart: unless-stopped
     networks:
       - app-network
+
+networks:
+  app-network:
+    external: true

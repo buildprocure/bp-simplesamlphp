@@ -1,0 +1,131 @@
+name: Build and Deploy to GHCR
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        type: choice
+        required: true
+        default: 'production'
+        options:
+          - production
+          - staging
+          - development
+      deploy_branch:
+        description: 'Confirm branch to deploy (Manual note)'
+        required: false
+        default: 'main'
+
+env:
+  IMAGE_NAME: ${{ github.event.repository.name }}
+  REGISTRY: ghcr.io
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Generate commit tag
+        id: vars
+        run: |
+          TAG=$(echo "${GITHUB_SHA}" | cut -c1-9)
+          IMAGE_BASE="${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}"
+
+          echo "TAG=$TAG" >> $GITHUB_OUTPUT
+          echo "IMAGE_BASE=$IMAGE_BASE" >> $GITHUB_OUTPUT
+
+      - name: Login to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Build Docker Image
+        run: |
+          docker build \
+            --no-cache \
+            -t ${{ steps.vars.outputs.IMAGE_BASE }}:${{ steps.vars.outputs.TAG }} \
+            -t ${{ steps.vars.outputs.IMAGE_BASE }}:latest \
+            -f Dockerfile \
+            .
+
+      - name: Push Docker Images
+        run: |
+          docker push ${{ steps.vars.outputs.IMAGE_BASE }}:${{ steps.vars.outputs.TAG }}
+          docker push ${{ steps.vars.outputs.IMAGE_BASE }}:latest
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+          MYSQL_USER: ${{ secrets.MYSQL_USER }}
+          MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          envs: GH_PAT,MYSQL_USER,MYSQL_PASSWORD
+          script: |
+            set -e
+
+            DEPLOY_DIR="/var/www/simplesamlphp"
+            sudo mkdir -p "$DEPLOY_DIR"
+            sudo chown "$USER":"$USER" "$DEPLOY_DIR"
+            cd "$DEPLOY_DIR"
+
+            if [ -z "$GH_PAT" ]; then
+              echo "GH_PAT is missing on remote shell"
+              exit 1
+            fi
+
+            echo "Downloading latest docker-compose.yml..."
+            curl -fsSL \
+              -H "Authorization: Bearer $GH_PAT" \
+              -H "Accept: application/vnd.github.raw" \
+              "https://api.github.com/repos/buildprocure/bp-simplesamlphp/contents/docker-compose.yml?ref=main" \
+              -o docker-compose.yml
+
+            echo "Downloading latest php-env-prod.env..."
+            curl -fsSL \
+              -H "Authorization: Bearer $GH_PAT" \
+              -H "Accept: application/vnd.github.raw" \
+              "https://api.github.com/repos/buildprocure/bp-simplesamlphp/contents/php-env-prod.env?ref=main" \
+              -o php-env-prod.env
+
+            echo "" >> php-env-prod.env
+            echo "Appending secrets to php-env-prod.env..."
+            cat >> php-env-prod.env <<EOF
+            MYSQL_USER=${MYSQL_USER}
+            MYSQL_PASSWORD=${MYSQL_PASSWORD}
+            EOF
+            chmod 600 php-env-prod.env
+
+            echo "Downloaded docker-compose.yml:"
+            cat docker-compose.yml
+
+            echo "Logging into GHCR..."
+            echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
+
+            echo "Pulling latest image..."
+            docker-compose pull
+
+            echo "Stopping existing container..."
+            docker-compose down --remove-orphans
+
+            echo "Starting new container..."
+            docker-compose up -d
+
+            echo "Cleaning old images..."
+            docker image prune -f
+
+            docker ps -a
