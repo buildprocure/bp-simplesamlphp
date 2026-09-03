@@ -88,12 +88,12 @@ jobs:
               exit 1
             fi
 
-            echo "Downloading latest docker-compose.yml..."
+            echo "Downloading latest docker-compose-sso.yml..."
             curl -fsSL \
               -H "Authorization: Bearer $GH_PAT" \
               -H "Accept: application/vnd.github.raw" \
-              "https://api.github.com/repos/buildprocure/bp-simplesamlphp/contents/docker-compose.yml?ref=main" \
-              -o docker-compose.yml
+              "https://api.github.com/repos/buildprocure/bp-simplesamlphp/contents/docker-compose-sso.yml?ref=main" \
+              -o docker-compose-sso.yml
 
             echo "Downloading latest php-env-prod.env..."
             curl -fsSL \
@@ -110,20 +110,30 @@ jobs:
             EOF
             chmod 600 php-env-prod.env
 
-            echo "Downloaded docker-compose.yml:"
-            cat docker-compose.yml
+            echo "Downloaded docker-compose-sso.yml:"
+            cat docker-compose-sso.yml
 
             echo "Logging into GHCR..."
             echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
 
             echo "Pulling latest image..."
-            docker-compose pull
+            docker-compose -p simplesamlphp -f docker-compose-sso.yml pull
 
             echo "Stopping existing container..."
-            docker-compose down --remove-orphans
+            docker-compose -p simplesamlphp -f docker-compose-sso.yml down --remove-orphans
+
+            echo "Checking for any leftover container still bound to host port 8081 (e.g. from an older, differently-named compose setup)..."
+            CONFLICTING_IDS=$(docker ps -a --filter "publish=8081" --format '{{.ID}}')
+            if [ -n "$CONFLICTING_IDS" ]; then
+              echo "Found container(s) publishing port 8081, removing only those (nothing else on this host is touched):"
+              docker ps -a --filter "publish=8081" --format '{{.ID}}\t{{.Names}}'
+              echo "$CONFLICTING_IDS" | xargs -r docker rm -f
+            else
+              echo "No conflicting container found on port 8081."
+            fi
 
             echo "Starting new container..."
-            docker-compose up -d
+            docker-compose -p simplesamlphp -f docker-compose-sso.yml up -d
 
             echo "Cleaning old images..."
             docker image prune -f
