@@ -39,8 +39,13 @@ try {
             // Microsoft Entra ID sends different claim URIs than Auth0.
             // 'roles' comes from the custom claim configured in Entra ID's
             // Attributes & Claims (Source attribute: user.assignedroles).
+            // Use the real email address as username, not the
+            // userprincipalname claim - for B2B guest accounts, Azure's
+            // UPN is an internal guest identifier (e.g.
+            // "name_domain.com#EXT#@tenant.onmicrosoft.com"), not a
+            // usable email/username.
             $email = $attributes['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress'][0] ?? '';
-            $username = $attributes['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name'][0] ?? $email;
+            $username = $email;
             $user_id = $username;
             $roles = isset($attributes['roles']) ? implode(',', $attributes['roles']) : '';
             $connection = 'saml';
