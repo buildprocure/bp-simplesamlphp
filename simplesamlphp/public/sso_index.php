@@ -78,13 +78,21 @@ try {
 
         $raw_attributes = json_encode($attributes, JSON_UNESCAPED_SLASHES);
 
+        // Issue a short-lived, single-use token instead of passing the
+        // username directly - sso.php on the procurex side must not
+        // trust a bare username in the URL as proof of a completed SSO
+        // login (that would let anyone log in as any user just by
+        // guessing/knowing a username). Stored in saml_users.session_token;
+        // 'updated' auto-bumps to NOW() on this UPDATE, so it doubles as
+        // the token's issued-at time for the expiry check in sso.php.
+        $ssoToken = bin2hex(random_bytes(32));
 
         $stmt = $conn->prepare("
             INSERT INTO saml_users
             (user_id, email, username, roles, connection, provider, created_at, updated_at, last_password_reset,
-            email_verified, phone_number, phone_verified, nickname, picture, raw_attributes)
+            email_verified, phone_number, phone_verified, nickname, picture, raw_attributes, session_token)
             VALUES
-            (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 email = VALUES(email),
                 username = VALUES(username),
@@ -98,11 +106,12 @@ try {
                 phone_verified = VALUES(phone_verified),
                 nickname = VALUES(nickname),
                 picture = VALUES(picture),
-                raw_attributes = VALUES(raw_attributes)
+                raw_attributes = VALUES(raw_attributes),
+                session_token = VALUES(session_token)
             ");
 
         $stmt->bind_param(
-            "sssssssssiissss",
+            "sssssssssiisssss",
             $user_id,
             $email,
             $username,
@@ -117,7 +126,8 @@ try {
             $phone_verified,
             $nickname,
             $picture,
-            $raw_attributes
+            $raw_attributes,
+            $ssoToken
         );
         $stmt->execute();
         $stmt->close();
@@ -125,8 +135,8 @@ try {
         $message = "User $username (ID: $user_id) processed and stored in database.";
         logSSOFlow($message);
 
-        // Redirect to sso.php
-        header('Location: https://buildprocure.com/sso.php?username=' . urlencode($username));
+        // Redirect to sso.php with the one-time token
+        header('Location: https://buildprocure.com/sso.php?token=' . urlencode($ssoToken));
         exit;
     }
 
