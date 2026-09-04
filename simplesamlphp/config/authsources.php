@@ -86,4 +86,37 @@ $config = [
         'AssertionConsumerServiceURL' => 'https://buildprocure.com/simplesaml/module.php/saml/sp/saml2-acs.php',
     ],
 
+    // Microsoft Entra ID (Azure AD) SAML SP - used for the allowlisted
+    // users in sso_index.php's $azureUsers array
+    'login-azure' => [
+        'saml:SP',
+
+        // SP entity ID must match the Identifier (Entity ID) configured
+        // on the BuildProcure SSO Enterprise Application in Entra ID
+        'entityID' => 'https://buildprocure.com/simplesaml/module.php/saml/sp/metadata.php/login-azure',
+
+        // IdP entity ID: the Microsoft Entra Identifier for this tenant
+        'idp' => 'https://sts.windows.net/0f4f143b-570a-4c60-aa54-96f1d9d3fe2e/',
+
+        'discoURL' => null,
+
+        'privatekey' => '/var/www/app/simplesamlphp/cert/saml.pem',
+        'certificate' => '/var/www/app/simplesamlphp/cert/saml.crt',
+
+        'redirect.sign' => true,
+        'sign.logout' => true,
+        'sign.authnrequest' => true,
+
+        // NameIDPolicy
+        'NameIDPolicy' => [
+            'Format' => 'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress',
+            'AllowCreate' => true,
+            'SPNameQualifier' => 'https://buildprocure.com/simplesaml/module.php/saml/sp/metadata.php/login-azure',
+        ],
+
+        // ACS URL - must match the Reply URL configured on the
+        // BuildProcure SSO Enterprise Application in Entra ID
+        'AssertionConsumerServiceURL' => 'https://buildprocure.com/simplesaml/module.php/saml/sp/saml2-acs.php/login-azure',
+    ],
+
 ];

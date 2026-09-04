@@ -4,35 +4,76 @@
 // Correct path to autoload
 require_once __DIR__ . '/../vendor/autoload.php';
 
+// Users in this list are routed through the Microsoft Entra ID (Azure AD)
+// authsource ('login-azure') instead of the default Auth0 authsource.
+$azureUsers = [
+    'connect2ilife@gmail.com',
+    'rkhadka.dev@gmail.com'
+];
+
 try {
-    $as = new \SimpleSAML\Auth\Simple('auth0');
+    $submittedEmail = null;
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['email'])) {
+        $submittedEmail = filter_var($_POST['email'], FILTER_VALIDATE_EMAIL) ?: null;
+    }
+
+    $useAzure = $submittedEmail && in_array(strtolower($submittedEmail), array_map('strtolower', $azureUsers), true);
+
+    error_log("submittedEmail: $submittedEmail, useAzure: " . ($useAzure ? 'true' : 'false'));
+
+    $authSourceId = $useAzure ? 'login-azure' : 'auth0';
+
+    $as = new \SimpleSAML\Auth\Simple($authSourceId);
+
 
     if ($as->isAuthenticated()) {
         $attributes = $as->getAttributes();
 
         include_once  __DIR__ .'/function.php'; // Logging helper
-        $message = "Received Attributes:\n";
+        $message = "Received Attributes ($authSourceId):\n";
         logSSOFlow($message . print_r($attributes, true));
 
         include_once __DIR__ . '/../../_dbconnect.php'; // Database connection
-         // Save Attributes to a variable or process as needed
-        $user_id = $attributes['http://schemas.auth0.com/user_id'][0] ?? '';
-        $email = $attributes['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress'][0] ?? '';
-        $username = $attributes['http://schemas.auth0.com/username'][0] ?? '';
-        $roles = isset($attributes['http://schemas.auth0.com/roles']) ? implode(',', $attributes['http://schemas.auth0.com/roles']) : '';
-        $connection = $attributes['http://schemas.auth0.com/identities/default/connection'][0] ?? '';
-        $provider = $attributes['http://schemas.auth0.com/identities/default/provider'][0] ?? '';
-        $created_at = isset($attributes['http://schemas.auth0.com/created_at'][0]) ? date('Y-m-d H:i:s', strtotime($attributes['http://schemas.auth0.com/created_at'][0])) : null;
-        $updated_at = isset($attributes['http://schemas.auth0.com/updated_at'][0]) ? date('Y-m-d H:i:s', strtotime($attributes['http://schemas.auth0.com/updated_at'][0])) : null;
-        $last_password_reset = isset($attributes['http://schemas.auth0.com/last_password_reset'][0]) ? date('Y-m-d H:i:s', strtotime($attributes['http://schemas.auth0.com/last_password_reset'][0])) : null;
-        $email_verified = isset($attributes['http://schemas.auth0.com/email_verified'][0]) ? (int)$attributes['http://schemas.auth0.com/email_verified'][0] : 0;
-        $phone_number = $attributes['http://schemas.auth0.com/phone_number'][0] ?? null;
-        $phone_verified = isset($attributes['http://schemas.auth0.com/phone_verified'][0]) ? (int)$attributes['http://schemas.auth0.com/phone_verified'][0] : 0;
-        $nickname = $attributes['http://schemas.auth0.com/nickname'][0] ?? null;
-        $picture = $attributes['http://schemas.auth0.com/picture'][0] ?? null;
+
+        if ($authSourceId === 'login-azure') {
+            // Microsoft Entra ID sends different claim URIs than Auth0.
+            // 'roles' comes from the custom claim configured in Entra ID's
+            // Attributes & Claims (Source attribute: user.assignedroles).
+            $email = $attributes['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress'][0] ?? '';
+            $username = $attributes['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name'][0] ?? $email;
+            $user_id = $username;
+            $roles = isset($attributes['roles']) ? implode(',', $attributes['roles']) : '';
+            $connection = 'saml';
+            $provider = 'azure';
+            $created_at = null;
+            $updated_at = null;
+            $last_password_reset = null;
+            $email_verified = 1;
+            $phone_number = null;
+            $phone_verified = 0;
+            $nickname = $attributes['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname'][0] ?? null;
+            $picture = null;
+        } else {
+            // Save Attributes to a variable or process as needed
+            $user_id = $attributes['http://schemas.auth0.com/user_id'][0] ?? '';
+            $email = $attributes['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress'][0] ?? '';
+            $username = $attributes['http://schemas.auth0.com/username'][0] ?? '';
+            $roles = isset($attributes['http://schemas.auth0.com/roles']) ? implode(',', $attributes['http://schemas.auth0.com/roles']) : '';
+            $connection = $attributes['http://schemas.auth0.com/identities/default/connection'][0] ?? '';
+            $provider = $attributes['http://schemas.auth0.com/identities/default/provider'][0] ?? '';
+            $created_at = isset($attributes['http://schemas.auth0.com/created_at'][0]) ? date('Y-m-d H:i:s', strtotime($attributes['http://schemas.auth0.com/created_at'][0])) : null;
+            $updated_at = isset($attributes['http://schemas.auth0.com/updated_at'][0]) ? date('Y-m-d H:i:s', strtotime($attributes['http://schemas.auth0.com/updated_at'][0])) : null;
+            $last_password_reset = isset($attributes['http://schemas.auth0.com/last_password_reset'][0]) ? date('Y-m-d H:i:s', strtotime($attributes['http://schemas.auth0.com/last_password_reset'][0])) : null;
+            $email_verified = isset($attributes['http://schemas.auth0.com/email_verified'][0]) ? (int)$attributes['http://schemas.auth0.com/email_verified'][0] : 0;
+            $phone_number = $attributes['http://schemas.auth0.com/phone_number'][0] ?? null;
+            $phone_verified = isset($attributes['http://schemas.auth0.com/phone_verified'][0]) ? (int)$attributes['http://schemas.auth0.com/phone_verified'][0] : 0;
+            $nickname = $attributes['http://schemas.auth0.com/nickname'][0] ?? null;
+            $picture = $attributes['http://schemas.auth0.com/picture'][0] ?? null;
+        }
+
         $raw_attributes = json_encode($attributes, JSON_UNESCAPED_SLASHES);
 
-       
+
         $stmt = $conn->prepare("
             INSERT INTO saml_users
             (user_id, email, username, roles, connection, provider, created_at, updated_at, last_password_reset,
